@@ -34,13 +34,14 @@
 
 #include <unordered_map>
 #include <algorithm>
+#include <span>
 
 // clang-format off
 namespace beast = boost::beast; // from <boost/beast.hpp>
 namespace net   = boost::asio;  // from <boost/asio.hpp>
 // clang-format on
 
-using BodyArguments = std::unordered_map<std::string, std::string>;
+using BodyArguments = std::pair<std::string, std::string>;
 
 namespace irods::http::handler
 {
@@ -156,15 +157,15 @@ namespace irods::http::handler
 		return "";
 	}
 
-	auto encode_body(BodyArguments args) -> std::string
+	auto encode_body(std::span<BodyArguments> args) -> std::string
 	{
 		auto encode_pair{
 			[](const BodyArguments::value_type& i) { return encode_string(i.first) + "=" + encode_string(i.second); }};
 
 		return std::transform_reduce(
-			std::next(std::begin(args)),
-			std::end(args),
-			encode_pair(*std::begin(args)),
+			std::next(std::cbegin(args)),
+			std::cend(args),
+			encode_pair(*std::cbegin(args)),
 			[](auto a, auto b) { return a + "?" + b; },
 			encode_pair);
 	}
@@ -218,7 +219,7 @@ namespace irods::http::handler
 
 			if (did_except) {
 				irods::http::globals::background_task([fn = __func__, _sess_ptr, _req = std::move(_req)] {
-					BodyArguments args{
+					std::array<BodyArguments, 5> args{
 						{"client_id",
 					     irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>()},
 						{"response_type", "code"},
@@ -264,7 +265,7 @@ namespace irods::http::handler
 					log::debug("{}: State is [{}]", fn, state_iter->second);
 
 					// Populate arguments
-					BodyArguments args{
+					std::array<BodyArguments, 4> args{
 						{"grant_type", "authorization_code"},
 						{"client_id",
 					     irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>()},
@@ -374,7 +375,7 @@ namespace irods::http::handler
 						"{}: username=[{}], password=[{}]", fn, username, password); // TODO Don't print the password
 
 					// BEGIN OG OAUTH THING
-					BodyArguments args{
+					std::array<BodyArguments, 5> args{
 						{"client_id",
 					     irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>()},
 						{"grant_type", "password"},
