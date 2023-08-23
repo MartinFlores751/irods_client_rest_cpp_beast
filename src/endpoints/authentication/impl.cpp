@@ -329,6 +329,21 @@ namespace irods::http::handler
 					// TODO: Handle case where we throw!!!
 					auto decoded_token{jwt::decode<jwt::traits::nlohmann_json>(jwt_token).get_payload_json()};
 
+					// OIDC ID Token Validation
+
+					// 1) Encrypted token case, not used currently
+
+					// 2) Issuer ID MUST match iss
+					if (const std::string iss{decoded_token.at("iss").get_ref<const std::string&>()};
+						iss != irods::http::globals::oidc_endpoint_configuration().at("issuer").get_ref<const std::string&>()) {
+						log::warn("Erm... This is awkward...");
+						return _sess_ptr->send(fail(status_type::bad_request));
+					}
+
+					// 3) We must be part of the aud (audience)
+					// 4) If mulitple aud, verify azp is present
+					// 5) If azp is present, verify we are in the azp claim
+
 					// Verify 'irods_username' exists
 					if (!decoded_token.contains("irods_username")) {
 						const auto user{
