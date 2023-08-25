@@ -173,6 +173,41 @@ namespace irods::http::handler
 		return false;
 	}
 
+	auto decode_username_and_password(std::string_view _encoded_data) -> std::pair<std::string, std::string>
+	{
+		std::string authorization{_encoded_data};
+		boost::trim(authorization);
+		log::debug("{}: Authorization value (trimmed): [{}]", __func__, authorization);
+
+		constexpr auto max_creds_size = 128;
+		unsigned long size = max_creds_size;
+		//std::vector<std::uint8_t> creds(size);
+		std::array<std::uint8_t, max_creds_size> creds{};
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+		const auto ec = irods::base64_decode(
+			reinterpret_cast<unsigned char*>(authorization.data()),
+			authorization.size(),
+			creds.data(),
+			&size);
+		log::debug("{}: base64 - error code=[{}], decoded size=[{}]", __func__, ec, size);
+
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+		std::string_view sv{reinterpret_cast<char*>(creds.data()), size};
+		log::debug("{}: base64 decode credentials = [{}]", __func__, sv); // TODO Don't print the password
+
+		const auto colon = sv.find(':');
+		if (colon == std::string_view::npos) {
+			return {"", ""};
+		}
+
+		std::string username{sv.substr(0, colon)};
+		std::string password{sv.substr(colon + 1)};
+		log::debug(
+			"{}: username=[{}], password=[{}]", __func__, username, password); // TODO Don't print the password
+
+		return {username, password};
+	}
+
 	IRODS_HTTP_API_ENDPOINT_ENTRY_FUNCTION_SIGNATURE(authentication)
 	{
 		if (_req.method() == boost::beast::http::verb::get) {
@@ -332,68 +367,107 @@ namespace irods::http::handler
 		// Handle posts
 		else if (_req.method() == boost::beast::http::verb::post) {
 			irods::http::globals::background_task([fn = __func__, _sess_ptr, _req = std::move(_req)] {
-				// Right, we're kinda being a proxy, so how about proxy-authorization?
 				const auto& hdrs{_req.base()};
 				const auto iter{hdrs.find("authorization")};
 
-				// Failed to find auth header, use OIDC auth_code flow instead
 				if (iter == std::end(hdrs)) {
 					return _sess_ptr->send(fail(status_type::bad_request));
 				}
 
 				log::debug("{}: Authorization value: [{}]", fn, iter->value());
 
-				//
-				// TODO Here is where we determine what form of authentication to perform (e.g. Basic or OIDC).
+				// Basic Auth case
+				if (const auto pos{iter->value().find("Basic ")}; pos != std::string_view::npos) {
+					constexpr auto basic_auth_scheme_prefix_size = 6;
+					const auto [username, password]{decode_username_and_password(iter->value().substr(pos + basic_auth_scheme_prefix_size))};
 
-				//
-				// BLAH BLAH BLAH, assume we have the user & pass...
-				// Prob via Proxy-Authorization????
-				//
+					bool login_successful = false;
 
-				const auto pos = iter->value().find("Basic ");
-				if (std::string_view::npos == pos) {
-					// TEMPORARY PLS MAKE BETTER LATER :)
+					try {
+						static const auto& rodsadmin_username =
+							irods::http::globals::configuration()
+							.at(nlohmann::json::json_pointer{"/irods_client/rodsadmin/username"})
+							.get_ref<const std::string&>();
+						static const auto& rodsadmin_password =
+							irods::http::globals::configuration()
+							.at(nlohmann::json::json_pointer{"/irods_client/rodsadmin/password"})
+							.get_ref<const std::string&>();
+						static const auto& zone = irods::http::globals::configuration()
+							.at(nlohmann::json::json_pointer{"/irods_client/zone"})
+							.get_ref<const std::string&>();
 
-					const auto alt_method{iter->value().find("iRODS ")};
-					if (std::string_view::npos == alt_method) {
-						return _sess_ptr->send(fail(status_type::bad_request));
+						CheckAuthCredentialsInput input{};
+						username.copy(input.username, sizeof(CheckAuthCredentialsInput::username));
+						zone.copy(input.zone, sizeof(CheckAuthCredentialsInput::zone));
+
+						namespace adm = irods::experimental::administration;
+						const adm::user_password_property prop{password, rodsadmin_password};
+						const auto obfuscated_password = irods::experimental::administration::obfuscate_password(prop);
+						obfuscated_password.copy(input.password, sizeof(CheckAuthCredentialsInput::password));
+
+						int* correct{};
+
+						auto conn = irods::get_connection(rodsadmin_username);
+
+						if (const auto ec = rc_check_auth_credentials(static_cast<RcComm*>(conn), &input, &correct); ec < 0)
+						{
+							log::error(
+								"{}: Error verifying native authentication credentials for user [{}]: error code [{}].",
+								fn,
+								username,
+								ec);
+						}
+						else {
+							log::debug("{}: correct = [{}]", fn, fmt::ptr(correct));
+							log::debug("{}: *correct = [{}]", fn, (correct ? *correct : -1));
+							login_successful = (correct && 1 == *correct);
+						}
+					}
+					catch (const irods::exception& e) {
+						log::error(
+							"{}: Error verifying native authentication credentials for user [{}]: {}",
+							fn,
+							username,
+							e.client_display_what());
+					}
+					catch (const std::exception& e) {
+						log::error(
+							"{}: Error verifying native authentication credentials for user [{}]: {}",
+							fn,
+							username,
+							e.what());
 					}
 
-					// BEGIN BASE64 HEADER DECODE
-
-					constexpr auto basic_auth_scheme_prefix_size = 6;
-					std::string authorization{iter->value().substr(alt_method + basic_auth_scheme_prefix_size)};
-					boost::trim(authorization);
-					log::debug("{}: Authorization value (trimmed): [{}]", fn, authorization);
-
-					constexpr auto max_creds_size = 128;
-					unsigned long size = max_creds_size;
-					//std::vector<std::uint8_t> creds(size);
-					std::array<std::uint8_t, max_creds_size> creds{};
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-					const auto ec = irods::base64_decode(
-						reinterpret_cast<unsigned char*>(authorization.data()),
-						authorization.size(),
-						creds.data(),
-						&size);
-					log::debug("{}: base64 - error code=[{}], decoded size=[{}]", fn, ec, size);
-
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-					std::string_view sv{reinterpret_cast<char*>(creds.data()), size};
-					log::debug("{}: base64 decode credentials = [{}]", fn, sv); // TODO Don't print the password
-
-					const auto colon = sv.find(':');
-					if (colon == std::string_view::npos) {
+					if (!login_successful) {
 						return _sess_ptr->send(fail(status_type::unauthorized));
 					}
 
-					std::string username{sv.substr(0, colon)};
-					std::string password{sv.substr(colon + 1)};
-					log::debug(
-						"{}: username=[{}], password=[{}]", fn, username, password); // TODO Don't print the password
+					static const auto seconds =
+						irods::http::globals::configuration()
+						.at(nlohmann::json::json_pointer{"/http_server/authentication/basic/timeout_in_seconds"})
+						.get<int>();
+					auto bearer_token = irods::process_stash::insert(authenticated_client_info{
+							.auth_scheme = authorization_scheme::basic,
+							.username = std::move(username),
+							.password = std::move(password),
+							.expires_at = std::chrono::steady_clock::now() + std::chrono::seconds{seconds}});
 
-					// BEGIN OG OAUTH THING
+					response_type res{status_type::ok, _req.version()};
+					res.set(field_type::server, irods::http::version::server_name);
+					res.set(field_type::content_type, "text/plain");
+					res.keep_alive(_req.keep_alive());
+					res.body() = std::move(bearer_token);
+					res.prepare_payload();
+
+					return _sess_ptr->send(std::move(res));
+				}
+				// OAuth 2.0 Resource Owner Password Credentials Grant
+				else if (const auto alt_method{iter->value().find("iRODS ")}; alt_method != std::string_view::npos) {
+                    // Decode username and password here!!!!!
+					constexpr auto basic_auth_scheme_prefix_size = 6;
+					const auto [username, password]{decode_username_and_password(iter->value().substr(alt_method + basic_auth_scheme_prefix_size))};
+
+					// Build up arguments for OIDC Token endpoint
 					body_arguments args{
 						{"client_id",
 					     irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>()},
@@ -417,8 +491,6 @@ namespace irods::http::handler
 					auto decoded_token{jwt::decode<jwt::traits::nlohmann_json>(jwt_token)};
 
 					// Get irods username
-					// Zones?
-					// uname#zname
 					const std::string irods_name{
 						decoded_token.get_payload_json().at("irods_username").get<const std::string>()};
 
@@ -442,112 +514,8 @@ namespace irods::http::handler
 					return _sess_ptr->send(std::move(res_rep));
 				}
 
-				constexpr auto basic_auth_scheme_prefix_size = 6;
-				std::string authorization{iter->value().substr(pos + basic_auth_scheme_prefix_size)};
-				boost::trim(authorization);
-				log::debug("{}: Authorization value (trimmed): [{}]", fn, authorization);
-
-				constexpr auto max_creds_size = 128;
-				unsigned long size = max_creds_size;
-				//std::vector<std::uint8_t> creds(size);
-				std::array<std::uint8_t, max_creds_size> creds{};
-				// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-				const auto ec = irods::base64_decode(
-					reinterpret_cast<unsigned char*>(authorization.data()), authorization.size(), creds.data(), &size);
-				log::debug("{}: base64 - error code=[{}], decoded size=[{}]", fn, ec, size);
-
-				// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-				std::string_view sv{reinterpret_cast<char*>(creds.data()), size};
-				log::debug("{}: base64 decode credentials = [{}]", fn, sv); // TODO Don't print the password
-
-				const auto colon = sv.find(':');
-				if (colon == std::string_view::npos) {
-					return _sess_ptr->send(fail(status_type::unauthorized));
-				}
-
-				std::string username{sv.substr(0, colon)};
-				std::string password{sv.substr(colon + 1)};
-				log::debug("{}: username=[{}], password=[{}]", fn, username, password); // TODO Don't print the password
-
-				bool login_successful = false;
-
-				try {
-					static const auto& rodsadmin_username =
-						irods::http::globals::configuration()
-							.at(nlohmann::json::json_pointer{"/irods_client/rodsadmin/username"})
-							.get_ref<const std::string&>();
-					static const auto& rodsadmin_password =
-						irods::http::globals::configuration()
-							.at(nlohmann::json::json_pointer{"/irods_client/rodsadmin/password"})
-							.get_ref<const std::string&>();
-					static const auto& zone = irods::http::globals::configuration()
-					                              .at(nlohmann::json::json_pointer{"/irods_client/zone"})
-					                              .get_ref<const std::string&>();
-
-					CheckAuthCredentialsInput input{};
-					username.copy(input.username, sizeof(CheckAuthCredentialsInput::username));
-					zone.copy(input.zone, sizeof(CheckAuthCredentialsInput::zone));
-
-					namespace adm = irods::experimental::administration;
-					const adm::user_password_property prop{password, rodsadmin_password};
-					const auto obfuscated_password = irods::experimental::administration::obfuscate_password(prop);
-					obfuscated_password.copy(input.password, sizeof(CheckAuthCredentialsInput::password));
-
-					int* correct{};
-
-					auto conn = irods::get_connection(rodsadmin_username);
-
-					if (const auto ec = rc_check_auth_credentials(static_cast<RcComm*>(conn), &input, &correct); ec < 0)
-					{
-						log::error(
-							"{}: Error verifying native authentication credentials for user [{}]: error code [{}].",
-							fn,
-							username,
-							ec);
-					}
-					else {
-						log::debug("{}: correct = [{}]", fn, fmt::ptr(correct));
-						log::debug("{}: *correct = [{}]", fn, (correct ? *correct : -1));
-						login_successful = (correct && 1 == *correct);
-					}
-				}
-				catch (const irods::exception& e) {
-					log::error(
-						"{}: Error verifying native authentication credentials for user [{}]: {}",
-						fn,
-						username,
-						e.client_display_what());
-				}
-				catch (const std::exception& e) {
-					log::error(
-						"{}: Error verifying native authentication credentials for user [{}]: {}",
-						fn,
-						username,
-						e.what());
-				}
-
-				if (!login_successful) {
-					return _sess_ptr->send(fail(status_type::unauthorized));
-				}
-
-				static const auto seconds =
-					irods::http::globals::configuration()
-						.at(nlohmann::json::json_pointer{"/http_server/authentication/basic/timeout_in_seconds"})
-						.get<int>();
-				auto bearer_token = irods::process_stash::insert(authenticated_client_info{
-					.auth_scheme = authorization_scheme::basic,
-					.username = std::move(username),
-					.password = std::move(password),
-					.expires_at = std::chrono::steady_clock::now() + std::chrono::seconds{seconds}});
-
-				response_type res{status_type::ok, _req.version()};
-				res.set(field_type::server, irods::http::version::server_name);
-				res.set(field_type::content_type, "text/plain");
-				res.keep_alive(_req.keep_alive());
-				res.body() = std::move(bearer_token);
-				res.prepare_payload();
-
-				return _sess_ptr->send(std::move(res));
+				// Fail case
+				return _sess_ptr->send(fail(status_type::bad_request));
 			});
 		}
 		else {
