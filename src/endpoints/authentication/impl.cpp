@@ -145,7 +145,7 @@ namespace irods::http::handler
 			std::next(std::cbegin(_args)),
 			std::cend(_args),
 			encode_pair(*std::cbegin(_args)),
-			[](const auto& a, const auto& b) { return fmt::format("{}?{}", a, b); },
+			[](const auto& a, const auto& b) { return fmt::format("{}&{}", a, b); },
 			encode_pair);
 	}
 

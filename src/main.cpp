@@ -450,9 +450,10 @@ auto main(int _argc, char* _argv[]) -> int
             beast::tcp_stream tcp_stream{io_ctx};
 
             // Load config
-            const auto host{oi_config.at("config_host").get<const std::string>()};
-            const auto port{oi_config.at("port").get<const std::string>()};
-            const auto uri{oi_config.at("uri").get<const std::string>()};
+            const auto host{oi_config.at("config_host").get_ref<const std::string&>()};
+            const auto port{std::to_string(oi_config.at("port").get<int>())};
+            const auto temp_uri{oi_config.at("well_known_uri").get_ref<const std::string&>()};
+			const auto uri{fmt::format("{}/.well-known/openid-configuration", temp_uri)};
 
             // Resolve addr
             const auto resolve{tcp_res.resolve(host, port)};
