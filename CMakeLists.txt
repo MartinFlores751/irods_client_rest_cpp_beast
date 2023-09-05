@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.18.0 FATAL_ERROR)
 
 find_package(IRODS REQUIRED CONFIG)
 
+include(RequireOutOfSourceBuild)
+
 set(IRODS_HTTP_API_BINARY_NAME "irods_http_api")
 
 set(IRODS_CLIENT_VERSION "0.1.0")
@@ -13,9 +15,10 @@ set(IRODS_HTTP_API_VERSION "${IRODS_CLIENT_VERSION}")
 
 set(IRODS_PACKAGE_REVISION "1")
 
-include(RequireOutOfSourceBuild)
-include(IrodsCXXCompiler)
+include(IrodsExternals)
+IRODS_MACRO_CHECK_DEPENDENCY_SET_FULLPATH(JWTCPP jwt-cpp0.6.99.0-0)
 
+include(IrodsCXXCompiler)
 set(CMAKE_CXX_STANDARD ${IRODS_CXX_STANDARD})
 set(CMAKE_CXX_EXTENSIONS OFF)
 # export-dynamic so stacktrace entries from executables have function names.
@@ -52,6 +55,10 @@ set(IRODS_BUILD_WITH_WERROR ${IRODS_BUILD_WITH_WERROR_DEFAULT} CACHE BOOL "Choos
 if (IRODS_BUILD_WITH_WERROR)
   add_compile_options(-Werror)
 endif()
+
+# jwt library to handle OIDC JWT responses containing user information
+find_package(jwt-cpp REQUIRED
+  HINTS "${IRODS_EXTERNALS_FULLPATH_JWTCPP}")
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fpermissive>)
