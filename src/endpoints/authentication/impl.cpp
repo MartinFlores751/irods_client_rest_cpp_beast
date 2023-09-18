@@ -336,11 +336,18 @@ namespace irods::http::handler
 
 					// Get OIDC token && feed to JWT parser
 					// TODO: Handle case where we throw!!!
-					auto decoded_token{jwt::decode<jwt::traits::nlohmann_json>(jwt_token)};
+					auto decoded_token{jwt::decode<jwt::traits::nlohmann_json>(jwt_token).get_payload_json()};
 
-					// Get irods username
-					const std::string irods_name{
-						decoded_token.get_payload_json().at("irods_username").get<const std::string>()};
+                    // Verify 'irods_username' exists
+                    if (!decoded_token.contains("irods_username")) {
+                      const auto user{decoded_token.contains("preferred_username") ? decoded_token.at("preferred_username").get<const std::string>() : ""};
+
+                      log::error("{}: No irods user associated with authenticated user [{}].", fn, user);
+                      return _sess_ptr->send(fail(status_type::bad_request));
+                    }
+
+                    // Get irods username
+                    const std::string& irods_name{decoded_token.at("irods_username").get_ref<const std::string&>()};
 
 					// Issue token?
 					static const auto seconds =
