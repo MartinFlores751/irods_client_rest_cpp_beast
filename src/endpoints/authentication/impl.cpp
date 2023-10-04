@@ -327,7 +327,18 @@ namespace irods::http::handler
 
 					// Get OIDC token && feed to JWT parser
 					// TODO: Handle case where we throw!!!
-					auto decoded_token{jwt::decode<jwt::traits::nlohmann_json>(jwt_token).get_payload_json()};
+					auto decoded_token{jwt::decode<jwt::traits::nlohmann_json>(jwt_token)};
+
+					auto token_header{decoded_toknen.get_header_json()};
+					auto token_payload{decoded_token.get_payload_json()};
+
+					// Cannot use jwt verfier?
+					// Since it handles generic jwt specs, and not OICD items...
+					// auto verifier{jwt::verify()
+					// 			  .with_issuer(irods::http::globals::oidc_endpoint_configuration().at("issuer").get_ref<const std::string&>())
+					// 			  .with_audience(irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>())
+					// .};
+
 
 					// OIDC ID Token Validation
 
@@ -340,9 +351,38 @@ namespace irods::http::handler
 						return _sess_ptr->send(fail(status_type::bad_request));
 					}
 
-					// 3) We must be part of the aud (audience)
+					// 3) We must be part of the aud (audience). MUST reject additional auds not trusted by client (All in this case)
+					if (decoded_token.at("aud").is_array() || decoded_token.at("aud").get<const std::string>() != irods::http::globals::oidc_configuration().at("client_id").get<const std::string>()) {
+					  log::warn("Erm... This is awkward...");
+					  return _sess_ptr->send(fail(status_type::bad_request));
+					}
 					// 4) If mulitple aud, verify azp is present
+					// - IGNORE: We will not support multiple auds rn...
 					// 5) If azp is present, verify we are in the azp claim
+					if (decoded_token.contains("azp")) {
+					  const auto azp_field{decoded_token.at("azp").get_ref<const std::string&>()};
+					  if (azp_field != irods::http::globals::oidc_configuration().at("client_id").get<const std::string>()) {
+						log::warn("Erm... This is awkward...");
+						return _sess_ptr->send(fail(status_type::bad_request));
+					  }
+					}
+					// TODO: These cases are funky, so go over them later...
+					// 6) May use TLS server validation?
+					// 7) alg should be RS256, or value specified in id_token_signed_response_alg
+					// 8) Conditional if MAC based algorithm
+
+					// 9) Current time MUST be less than exp, MAY include tollerance of few min at most
+					if (std::chrono::steady_clock::now() >= decoded_token.at("exp")) {
+					  // blah blah...
+					}
+
+					// 10) iat must be in our desired range, or we decline it! (How fresh do we want this?)
+
+					// 11) Don't think we set a nonce, though let's double check later...
+
+					// 12) Don't believe we requested the acr claim, so we should be able to ignore it...
+
+					// 13) Don't think we requested the auth_time claim, so we may be able to ignore it...
 
 					// Verify 'irods_username' exists
 					if (!decoded_token.contains("irods_username")) {
