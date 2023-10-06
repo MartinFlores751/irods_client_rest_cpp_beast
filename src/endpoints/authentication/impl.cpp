@@ -378,9 +378,9 @@ namespace irods::http::handler
 
 					// 10) iat must be in our desired range, or we decline it! (How fresh do we want this?)
 
-					// 11) Don't think we set a nonce, though let's double check later...
+					// 11) Don't think we set a nonce, though let's double check later... (OIDC bonus param, we do not set, though we can)
 
-					// 12) Don't believe we requested the acr claim, so we should be able to ignore it...
+					// 12) Don't believe we requested the acr claim, so we should be able to ignore it... (OIDC bonus param, we do not request, though we can)
 
 					// 13) Don't think we requested the auth_time claim, so we may be able to ignore it...
 
