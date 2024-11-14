@@ -1,8 +1,8 @@
-name: build-irods-ubuntu
-on: [push, pull_request]
+name: iRODS HTTP API Builder
+on: [pull_request]
 jobs:
   build:
-    name: Build iRODS HTTP API
+    name: Build iRODS HTTP API with CCache
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout Repository
