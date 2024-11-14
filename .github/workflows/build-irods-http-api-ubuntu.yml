@@ -45,6 +45,8 @@ jobs:
                 irods-externals-spdlog-libcxx1.9.2-2
       - name: Configure Ccache
         uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          append-timestamp: false
       - name: Configure CMake
         run:  |
               export PATH=/opt/irods-externals/cmake3.21.4-0/bin:$PATH
