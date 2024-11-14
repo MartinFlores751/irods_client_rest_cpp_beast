@@ -47,7 +47,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2
         with:
           append-timestamp: false
-          key: ${{ github.ref_name }}
+          key: ${{ github.base_ref }}-${{ github.head_ref }}
       - name: Configure CMake
         run:  |
               export PATH=/opt/irods-externals/cmake3.21.4-0/bin:$PATH
