@@ -9,8 +9,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Misc
         run:  |
-              apt-get update -qq
-              apt-get install -qq \
+              sudo apt-get update -qq
+              sudo apt-get install -qq \
                 apt-transport-https \
                 git \
                 gnupg \
@@ -24,18 +24,18 @@ jobs:
                 ninja-build
       - name: Install iRODS
         run:  |
-              wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add - &&
+              wget -qO - https://packages.irods.org/irods-signing-key.asc | sudo apt-key add - &&
               echo "deb [arch=amd64] https://packages.irods.org/apt/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/renci-irods.list
-              apt-get update -qq
-              apt-get install -qq \
+              sudo apt-get update -qq
+              sudo apt-get install -qq \
                 irods-dev=4.3.2-0~jammy \
                 irods-runtime=4.3.2-0~jammy
       - name: Install iRODS Externals
         run:  |
-              wget -qO - https://unstable.irods.org/irods-unstable-signing-key.asc | apt-key add -
+              wget -qO - https://unstable.irods.org/irods-unstable-signing-key.asc | sudo apt-key add -
               echo "deb [arch=amd64] https://unstable.irods.org/apt/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/renci-irods-unstable.list
-              apt-get update -qq
-              apt-get install -qq \
+              sudo apt-get update -qq
+              sudo apt-get install -qq \
                 irods-externals-clang13.0.1-0 \
                 irods-externals-cmake3.21.4-0 \
                 irods-externals-fmt-libcxx8.1.1-1 \
