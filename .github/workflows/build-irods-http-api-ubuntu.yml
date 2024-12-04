@@ -1,0 +1,84 @@
+name: Build Package
+on: [pull_request]
+jobs:
+  build:
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ 'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04' ]
+        irods-version: [ 4.3.2, 4.3.3 ]
+        exclude:
+          - os: 'ubuntu:24.04'
+            irods-version: 4.3.2
+          - os: 'ubuntu:22.04'
+            irods-version: 4.3.3
+          - os: 'ubuntu:20.04'
+            irods-version: 4.3.3
+    runs-on: ubuntu-latest
+    container: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Install Prerequisites
+        if: ${{ matrix.os != 'ubuntu:20.04' }}
+        run:  |
+              apt-get update -qq
+              apt-get install -qq \
+                apt-transport-https \
+                gnupg \
+                lsb-release \
+                wget \
+                g++-11 \
+                gcc-11 \
+                libcurl4-gnutls-dev \
+                libssl-dev \
+                libssl3 \
+                ninja-build
+      - name: Install Prerequisites - Ubuntu 20.04
+        if: ${{ matrix.os == 'ubuntu:20.04' }}
+        run:  |
+              apt-get update -qq
+              apt-get install -qq \
+                apt-transport-https \
+                gnupg \
+                lsb-release \
+                wget \
+                g++-10 \
+                gcc-10 \
+                libcurl4-gnutls-dev \
+                libssl-dev \
+                libssl1.1 \
+                ninja-build
+      - name: Install iRODS
+        run:  |
+              wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add - &&
+              echo "deb [arch=amd64] https://packages.irods.org/apt/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/renci-irods.list
+              apt-get update -qq
+              apt-get install -qq \
+                "irods-dev=${{ matrix.irods-version }}-0~$(lsb_release -sc)" \
+                "irods-runtime=${{ matrix.irods-version }}-0~$(lsb_release -sc)"
+      - name: Install iRODS Externals
+        run:  |
+              wget -qO - https://unstable.irods.org/irods-unstable-signing-key.asc | apt-key add -
+              echo "deb [arch=amd64] https://unstable.irods.org/apt/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/renci-irods-unstable.list
+              apt-get update -qq
+              apt-get install -qq \
+                irods-externals-clang13.0.1-0 \
+                irods-externals-cmake3.21.4-0 \
+                irods-externals-fmt-libcxx8.1.1-1 \
+                irods-externals-json3.10.4-0 \
+                irods-externals-jwt-cpp0.6.99.1-0 \
+                irods-externals-nanodbc-libcxx2.13.0-2 \
+                irods-externals-spdlog-libcxx1.9.2-2
+      - name: Configure CMake
+        run:  |
+              export PATH=/opt/irods-externals/cmake3.21.4-0/bin:$PATH
+              mkdir build
+              cmake -GNinja -B build/ -S .
+      - name: Build and Package
+        run:  |
+              export PATH=/opt/irods-externals/cmake3.21.4-0/bin:$PATH
+              cmake --build build/ -t package

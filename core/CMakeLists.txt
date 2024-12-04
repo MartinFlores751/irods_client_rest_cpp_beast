@@ -29,6 +29,7 @@ target_link_libraries(
   "${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_url.so"
   CURL::libcurl
   jwt-cpp::jwt-cpp
+  "${CMAKE_DL_LIBS}"
 )
 
 target_compile_definitions(
