@@ -14,8 +14,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
     apt-get upgrade -y && \
-    apt-get autoremove -y --purge && \
-    rm -rf /tmp/*
+    apt-get autoremove -y --purge
 # To mark all installed packages as manually installed:
 #apt-mark showauto | xargs -r apt-mark manual
 
@@ -26,9 +25,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         git \
         gnupg \
         lsb-release \
-        wget \
-    && \
-    rm -rf /tmp/*
+        wget
 
 RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add - && \
     echo "deb [arch=amd64] https://packages.irods.org/apt/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/renci-irods.list
@@ -53,9 +50,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libcurl4-gnutls-dev \
         libssl-dev \
         libssl3 \
-        ninja-build \
-    && \
-    rm -rf /tmp/*
+        ninja-build
 
 ARG cmake_path="/opt/irods-externals/cmake3.21.4-0/bin"
 ENV PATH=${cmake_path}:$PATH

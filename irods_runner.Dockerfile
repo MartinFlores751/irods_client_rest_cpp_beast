@@ -14,8 +14,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
     apt-get upgrade -y && \
-    apt-get autoremove -y --purge && \
-    rm -rf /tmp/*
+    apt-get autoremove -y --purge
 # To mark all installed packages as manually installed:
 #apt-mark showauto | xargs -r apt-mark manual
 
@@ -29,7 +28,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         python3-pip \
         wget \
     && \
-    rm -rf /tmp/* && \
     python3 -m pip install jsonschema
 
 RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add - && \
@@ -45,17 +43,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         gcc \
         gcc-11 \
         irods-runtime=${irods_version} \
-        irods-externals-clang-runtime13.0.1-0 \
-    && \
-    rm -rf /tmp/*
+        irods-externals-clang-runtime13.0.1-0
 
 COPY ./*.deb /
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
-    apt-get install -y /*.deb && \
-    rm -rf /tmp/*
+    apt-get install -y /*.deb
 
 # Create a dedicated user for running the HTTP API.
 ARG http_api_user=irods_http_api
