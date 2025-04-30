@@ -622,6 +622,10 @@ namespace irods::http::openid
 					.with_audience(
 						irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>())};
 
+			// Debug format. The string is quoted and special characters escaped.
+			logging::debug("{}: client_id=[{:?}]", __func__, irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>());
+			logging::debug("{}: aud=[{:?}]", __func__, _jwt.get_audience().as_string());
+
 			add_algorithms_to_verifier(_type, verifier, jwks, _jwt);
 
 			// Attempt token validation

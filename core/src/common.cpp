@@ -364,6 +364,8 @@ namespace irods::http
 					if (possible_json_res) {
 						json_res = *possible_json_res;
 					}
+				} else {
+				  logging::trace("{}: No [introspection_endpoint] found in [oidc_endpoint_configuration].", __func__);
 				}
 
 				if (json_res.empty()) {
