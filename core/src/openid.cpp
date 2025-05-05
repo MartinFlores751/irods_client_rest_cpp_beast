@@ -420,14 +420,19 @@ namespace irods::http::openid
 		// Get the JWK the access token was signed with. This is optional.
 		// See RFC 7515 Section 4.1.4
 		if (_jwt.has_key_id()) {
+			logging::trace("{}: JWT has [kid], searching the JWKs list...", __func__);
 			auto key_id{_jwt.get_key_id()};
 			if (_jwks.has_jwk(key_id)) {
+				logging::trace("{}: [kid] found in JWKs list, adding...", __func__);
 				auto jwk{_jwks.get_jwk(key_id)};
 				add_asymmetric_algorithm_from_jwk(_verifier, jwk, alg);
 
 				return _verifier;
 			}
 			logging::warn("{}: Could not find the desired [kid] in the JWKs list.", __func__);
+		}
+		else {
+			logging::warn("{}: The JWT has no [kid], finding matching JWK through alternative methods...", __func__);
 		}
 		// We cannot pick out the specific key used, go through entire list of JWKs
 
@@ -517,7 +522,9 @@ namespace irods::http::openid
 
 		try {
 			// Parse the JWKs discovered from the OpenID Provider
+			logging::trace("{}: Getting JWKs...", __func__);
 			static auto jwks{jwt::parse_jwks<jwt::traits::nlohmann_json>(fetch_jwks_from_openid_provider())};
+			logging::trace("{}: Done parsing JWKs.", __func__);
 
 			// Handling missing 'typ'
 			if (!_jwt.has_type()) {

@@ -823,7 +823,9 @@ auto load_oidc_configuration(const json& _config, json& _oi_config, json& _endpo
 		logging::debug("Got the following back: {}", res.body());
 
 		// Convert http json response to nlomman json response
+		logging::trace("{}: Converting JSON response into nlohmann json object...", __func__);
 		_endpoint_config = json::parse(res.body());
+		logging::trace("{}: Done converting into nlohmann json object...", __func__);
 
 		// Check required items in response
 		if (!(_endpoint_config.contains("issuer") && _endpoint_config.contains("authorization_endpoint") &&
