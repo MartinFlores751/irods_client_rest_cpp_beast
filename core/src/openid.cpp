@@ -630,8 +630,24 @@ namespace irods::http::openid
 						irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>())};
 
 			// Debug format. The string is quoted and special characters escaped.
-			logging::debug("{}: client_id=[{:?}]", __func__, irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>());
-			logging::debug("{}: aud=[{:?}]", __func__, _jwt.get_audience().as_string());
+			logging::debug(
+				fmt::runtime("{:s}: client_id=[{:?}]"),
+				__func__,
+				irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>());
+
+			// 'aud' can contain multiple items, log them all
+			std::string aud_log{};
+			std::string matching_log{};
+			for (const auto& aud : _jwt.get_audience()) {
+				const auto& client_id_here{
+					irods::http::globals::oidc_configuration().at("client_id").get_ref<const std::string&>()};
+				fmt::format_to(std::back_inserter(aud_log), fmt::runtime(" [{:?}]"), aud);
+				fmt::format_to(std::back_inserter(matching_log), " [{}]", client_id_here == aud);
+			}
+
+			// Log the 'aud' claim
+			logging::debug(fmt::runtime("{:s}: aud=[{:?} ]"), __func__, aud_log);
+			logging::debug("{:s}: Matches client_id? [{:s} ]", __func__, matching_log);
 
 			add_algorithms_to_verifier(_type, verifier, jwks, _jwt);
 
