@@ -261,11 +261,14 @@ namespace irods::http
 
 	auto create_host_field(boost::urls::url_view _url, std::string_view _port) -> std::string
 	{
+		namespace logging = irods::http::log;
 		if ((_port == "443" && _url.scheme_id() == boost::urls::scheme::https) ||
 		    (_port == "80" && _url.scheme_id() == boost::urls::scheme::http))
 		{
+			logging::trace("{}: Setting [Host] to {}", __func__, _url.host());
 			return _url.host();
 		}
+		logging::trace("{}: Setting [Host] to {}:{}", __func__, _url.host(), _port);
 		return fmt::format("{}:{}", _url.host(), _port);
 	}
 
